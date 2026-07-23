@@ -39,3 +39,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# AI agent skill cache (regenerate with `clerk init`)
+/.agents
+skills-lock.json
+
+# local-only agent tooling settings
+.claude/settings.local.json
