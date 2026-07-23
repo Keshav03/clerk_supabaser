@@ -36,6 +36,11 @@
   --color-secondary: var(--secondary);
   --color-primary-foreground: var(--primary-foreground);
   --color-primary: var(--primary);
+  --color-primary-tint: var(--primary-tint);
+  --color-primary-tint-foreground: var(--primary-tint-foreground);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
   --color-popover-foreground: var(--popover-foreground);
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
@@ -56,8 +61,13 @@
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
+  --primary: #4F46E5;
+  --primary-foreground: #FFFFFF;
+  --primary-tint: #EEF2FF;
+  --primary-tint-foreground: #3730A3;
+  --success: #16A34A;
+  --warning: #F59E0B;
+  --warning-foreground: #92400E;
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
@@ -91,8 +101,13 @@
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.205 0 0);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
+  --primary: #818CF8;
+  --primary-foreground: #1E1B4B;
+  --primary-tint: #1E1B4B;
+  --primary-tint-foreground: #C7D2FE;
+  --success: #22C55E;
+  --warning: #FBBF24;
+  --warning-foreground: #451A03;
   --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.269 0 0);
@@ -128,4 +143,36 @@
   html {
     @apply font-sans;
   }
+}
+
+/* Highlighted plan card on the pricing table — targets Clerk's stable
+   public `cl-*` class names (not the hashed `cl-internal-*` ones). */
+.cl-pricingTableCard__pro {
+  background: var(--primary) !important;
+  border-color: transparent !important;
+  box-shadow: 0 12px 32px -12px rgb(79 70 229 / 0.5);
+  transform: scale(1.04);
+}
+.cl-pricingTableCard__pro .cl-pricingTableCardTitle,
+.cl-pricingTableCard__pro .cl-pricingTableCardFee {
+  color: var(--primary-foreground) !important;
+}
+.cl-pricingTableCard__pro .cl-pricingTableCardFeePeriodNotice,
+.cl-pricingTableCard__pro .cl-pricingTableCardFeaturesList,
+.cl-pricingTableCard__pro .cl-pricingTableCardFooterNotice {
+  color: rgb(255 255 255 / 0.75) !important;
+}
+.cl-pricingTableCard__pro .cl-pricingTableCardBadge {
+  background: var(--warning) !important;
+  color: var(--warning-foreground) !important;
+}
+.cl-pricingTableCard__pro .cl-pricingTableCardFooterButton {
+  background: #fff !important;
+  /* Always the strong light-mode indigo, not the paler dark-mode
+     --primary — this button's background is always white regardless
+     of page theme, so its text needs to stay high-contrast. */
+  color: #4338ca !important;
+}
+.cl-pricingTableCard__pro .cl-pricingTableCardFooterButton:hover {
+  background: rgb(255 255 255 / 0.9) !important;
 }
