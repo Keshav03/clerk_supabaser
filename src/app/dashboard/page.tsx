@@ -1,21 +1,51 @@
+import Link from "next/link";
 import { ListTodo } from "lucide-react";
 import { auth } from "@clerk/nextjs/server";
+import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getTaskLimit, getPlanLabel } from "@/lib/plans";
+import { TASK_STATUSES, TASK_STATUS_LABELS, isTaskStatus } from "@/lib/tasks";
 import { TaskForm } from "@/components/task-form";
 import { TaskItem } from "@/components/task-item";
 import { cn } from "@/lib/utils";
 
-export default async function DashboardPage() {
-  const { has } = await auth.protect();
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ status?: string }>;
+}) {
+  const { has, orgId } = await auth.protect();
+
+  if (!orgId) redirect("/");
+
+  const { status } = await searchParams;
+  const activeFilter = isTaskStatus(status) ? status : "all";
+
+  const canDelete = has({ permission: "org:tasks:delete" });
 
   const supabase = createSupabaseServerClient();
-  const [{ data: tasks, error }, limit] = await Promise.all([
-    supabase.from("tasks").select("*").order("created_at", { ascending: false }),
+
+  let tasksQuery = supabase
+    .from("tasks")
+    .select("*")
+    .eq("org_id", orgId)
+    .order("created_at", { ascending: false });
+
+  if (activeFilter !== "all") {
+    tasksQuery = tasksQuery.eq("status", activeFilter);
+  }
+
+  const [{ data: tasks, error }, { count }, limit] = await Promise.all([
+    tasksQuery,
+    supabase
+      .from("tasks")
+      .select("*", { count: "exact", head: true })
+      .eq("org_id", orgId),
     getTaskLimit(supabase, has),
   ]);
 
-  const taskCount = tasks?.length ?? 0;
+  // Plan limits count every task in the org, not just the filtered view
+  const taskCount = count ?? 0;
   const atLimit = taskCount >= limit;
   const planLabel = getPlanLabel(has);
   const isUnlimited = limit === Infinity;
@@ -25,6 +55,8 @@ export default async function DashboardPage() {
     : usagePct >= 70
       ? "bg-warning"
       : "bg-success";
+
+  const filters = ["all", ...TASK_STATUSES] as const;
 
   return (
     <div className="mx-auto flex w-full max-w-xl flex-col gap-8 px-6 py-12">
@@ -52,7 +84,25 @@ export default async function DashboardPage() {
       <TaskForm atLimit={atLimit} planLabel={planLabel} />
 
       <div className="flex flex-col gap-3">
+        <div className="flex gap-1.5">
+          {filters.map((filter) => (
+            <Link
+              key={filter}
+              href={filter === "all" ? "/dashboard" : `/dashboard?status=${filter}`}
+              className={cn(
+                "rounded-lg px-3 py-1.5 text-[13px] font-medium transition-colors",
+                activeFilter === filter
+                  ? "bg-primary text-primary-foreground"
+                  : "text-zinc-500 hover:bg-muted",
+              )}
+            >
+              {filter === "all" ? "All" : TASK_STATUS_LABELS[filter]}
+            </Link>
+          ))}
+        </div>
+
         {error && <p className="text-sm text-red-500">{error.message}</p>}
+
         {taskCount === 0 ? (
           <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed py-8 text-center">
             <div className="flex size-10 items-center justify-center rounded-[10px] bg-zinc-100 dark:bg-zinc-800">
@@ -65,8 +115,14 @@ export default async function DashboardPage() {
               </p>
             </div>
           </div>
+        ) : tasks?.length === 0 ? (
+          <p className="rounded-xl border border-dashed py-8 text-center text-[13px] text-zinc-500">
+            No tasks in this view.
+          </p>
         ) : (
-          tasks?.map((task) => <TaskItem key={task.id} task={task} />)
+          tasks?.map((task) => (
+            <TaskItem key={task.id} task={task} canDelete={canDelete} />
+          ))
         )}
       </div>
     </div>
