@@ -1,5 +1,7 @@
 # clerk-supabaser
 
+**[Live demo](https://clerk-supabaser.vercel.app)** · sign up, create an organization, and the dashboard is yours.
+
 A small multi-tenant task app built with Next.js, [Clerk](https://clerk.com) and [Supabase](https://supabase.com). Users belong to organizations, and every task belongs to an organization rather than to a person — so switching orgs switches the whole workspace.
 
 I started this as a plain Clerk + Supabase wiring exercise and kept going, mostly because I wanted to understand how tenant isolation actually gets enforced rather than just filtering rows in a query and hoping for the best.

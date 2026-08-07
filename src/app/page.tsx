@@ -44,19 +44,23 @@ export default function Home() {
               <Lock className="size-4.5 text-primary" />
             </div>
             <div className="mb-1.5 text-[15px] font-semibold">
-              Authentication
+              Teams and roles
             </div>
             <p className="text-[13px] leading-5 text-zinc-500">
-              Sign-up, session, and social login handled end to end.
+              Sign in, switch organizations, and split access between admins
+              and members.
             </p>
           </div>
           <div className="rounded-xl border bg-white p-6 dark:bg-zinc-900">
             <div className="mb-3.5 flex size-9 items-center justify-center rounded-[9px] bg-primary-tint">
               <DatabaseIcon className="size-4.5 text-primary" />
             </div>
-            <div className="mb-1.5 text-[15px] font-semibold">Database</div>
+            <div className="mb-1.5 text-[15px] font-semibold">
+              Isolated by default
+            </div>
             <p className="text-[13px] leading-5 text-zinc-500">
-              A Postgres store with rows scoped to each signed-in user.
+              Postgres row level security scopes every task to your
+              organization.
             </p>
           </div>
         </div>
