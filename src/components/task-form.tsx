@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useSupabaseClient } from "@/lib/supabase/client";
+import { createTask } from "@/app/dashboard/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -14,7 +14,6 @@ export function TaskForm({
   atLimit: boolean;
   planLabel: string;
 }) {
-  const supabase = useSupabaseClient();
   const router = useRouter();
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -24,9 +23,9 @@ export function TaskForm({
     e.preventDefault();
     if (!name.trim()) return;
 
-    const { error } = await supabase.from("tasks").insert({ name });
-    if (error) {
-      setError(error.message);
+    const result = await createTask(name);
+    if (result.error) {
+      setError(result.error);
       return;
     }
 

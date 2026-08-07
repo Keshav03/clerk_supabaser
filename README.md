@@ -1,93 +1,97 @@
 # clerk-supabaser
 
-A minimal Next.js starter wiring [Clerk](https://clerk.com) (auth) to [Supabase](https://supabase.com) (Postgres) using Supabase's native third-party auth integration — no JWT templates, no user-sync webhook.
+A small multi-tenant task app built with Next.js, [Clerk](https://clerk.com) and [Supabase](https://supabase.com). Users belong to organizations, and every task belongs to an organization rather than to a person — so switching orgs switches the whole workspace.
 
-## Stack
+I started this as a plain Clerk + Supabase wiring exercise and kept going, mostly because I wanted to understand how tenant isolation actually gets enforced rather than just filtering rows in a query and hoping for the best.
 
-- Next.js 16 (App Router, Turbopack)
-- TypeScript
-- Tailwind CSS + shadcn/ui
-- Clerk (`@clerk/nextjs`) — auth
-- Supabase (`@supabase/supabase-js`) — Postgres + RLS
+## The part I'd want to talk about
 
-## Setup
+Task isolation is enforced by Postgres, not by application code.
 
-### 1. Environment variables
-
-Copy the example file and fill in real values:
-
-```bash
-cp .env.local.example .env.local
-```
-
-**Clerk** — [Dashboard](https://dashboard.clerk.com) → your app → **API Keys**:
-- `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
-- `CLERK_SECRET_KEY`
-
-**Supabase** — [Dashboard](https://supabase.com/dashboard) → your project → **Settings → API**:
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (the `anon`/publishable key)
-
-### 2. Link Clerk and Supabase
-
-1. In the **Clerk Dashboard**, find the Supabase integration setup and activate it to get your Clerk domain (looks like `https://your-app.clerk.accounts.dev`).
-2. In the **Supabase Dashboard** → your project → `/auth/third-party` → add a new provider → **Clerk** → paste that domain.
-
-Without this step, Supabase will reject Clerk's session tokens and every query will fail RLS checks.
-
-### 3. Create the `tasks` table
-
-Run this in the Supabase **SQL Editor**:
+Clerk and Supabase are linked through Supabase's third-party auth integration, so the session token Clerk issues is the same token Postgres verifies. When you have an organization selected, that token carries the org id, and Row Level Security compares it against every row:
 
 ```sql
-create table tasks (
-  id bigint generated always as identity primary key,
-  name text not null,
-  user_id text not null default (auth.jwt()->>'sub'),
-  created_at timestamptz not null default now()
-);
-
-alter table tasks enable row level security;
-
-create policy "Users can view their own tasks"
-on tasks for select
-to authenticated
-using ((select auth.jwt()->>'sub') = user_id);
-
-create policy "Users can insert their own tasks"
-on tasks for insert
-to authenticated
-with check ((select auth.jwt()->>'sub') = user_id);
-
-create policy "Users can update their own tasks"
-on tasks for update
-to authenticated
-using ((select auth.jwt()->>'sub') = user_id)
-with check ((select auth.jwt()->>'sub') = user_id);
-
-create policy "Users can delete their own tasks"
-on tasks for delete
-to authenticated
-using ((select auth.jwt()->>'sub') = user_id);
+using (org_id = (select auth.jwt()->'o'->>'id'))
 ```
 
-### 4. Run it
+One thing that cost me an afternoon: Clerk nests the organization under an `o` claim (`o.id`, `o.rol`) rather than exposing a top-level `org_id`. If you write policies against `auth.jwt()->>'org_id'` they don't error, they just silently match nothing and every query comes back empty.
+
+This means the app code doesn't filter by user at all. `select * from tasks` returns exactly the tasks the caller is allowed to see, because Postgres refuses to hand over anything else. The `.eq("org_id", orgId)` you'll find in the queries is belt-and-braces, not the actual boundary.
+
+### Deleting is admin-only, checked three times
+
+Members can create tasks and move them between states. Only org admins can delete. That rule is enforced at three levels, deliberately:
+
+1. **UI** — the dashboard passes a `canDelete` boolean down and the trash icon isn't rendered for members. Cosmetic only.
+2. **Server action** — `deleteTask` checks `has({ permission: "org:tasks:delete" })` before touching the database. This is the real gate for anyone calling the endpoint directly.
+3. **RLS** — the delete policy additionally requires `auth.jwt()->'o'->>'rol' = 'admin'`, so even a hand-rolled Supabase call from the browser console gets rejected.
+
+Any one of those could be bypassed on its own. The database one can't.
+
+### Writes go through server actions
+
+Every write is a server action that reads `orgId` and `userId` from `auth()` and binds them itself. The client never supplies a tenant id, because a client-supplied tenant id is just a cross-tenant write waiting to happen.
+
+Plan limits are enforced the same way. The dashboard swaps the form for an upgrade prompt when you're at your limit, but that's a hint — `createTask` counts the org's tasks server-side and refuses the insert. Hiding a form is not enforcement.
+
+## Architecture
+
+```
+Browser
+   │
+   ▼
+Next.js (App Router)
+   ├── proxy.ts ............. Clerk middleware; attaches the session
+   ├── Server Components .... read data, already authenticated
+   ├── Server Actions ....... all writes; bind org_id from auth()
+   └── /api/webhooks/clerk .. verified billing events
+   │
+   ├──────── Clerk ......... identity, orgs, roles, billing plans
+   │           │
+   │           └── session token (sub, o.id, o.rol)
+   ▼
+Supabase / Postgres
+   └── RLS evaluates auth.jwt() on every statement
+```
+
+Two Supabase clients, for two different situations:
+
+- `src/lib/supabase/server.ts` and `client.ts` attach the caller's Clerk token, so RLS applies.
+- `src/lib/supabase/admin.ts` uses the service role key and bypasses RLS. It exists only for the webhook handler, which receives no user session and therefore has no token to send. It's server-only for obvious reasons.
+
+## Running it locally
+
+Clone it, then follow [SETUP.md](SETUP.md) — you'll need a Clerk application and a Supabase project, plus a few dashboard settings that can't be scripted.
 
 ```bash
 npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000), sign up, then visit `/dashboard` to add and view tasks scoped to your account.
+## Where things are
 
-## Project structure
+```
+src/
+  proxy.ts                     Clerk middleware (Next 16 renamed middleware.ts)
+  app/
+    dashboard/page.tsx         org-scoped task list, status filters, usage bar
+    dashboard/actions.ts       every write: create, status change, delete
+    api/webhooks/clerk/        verified Clerk billing events
+    pricing/page.tsx           Clerk PricingTable
+  lib/
+    plans.ts                   active plan slug → task limit
+    tasks.ts                   task status union, labels, type guard
+    supabase/                  server, browser and service-role clients
+```
 
-- `src/proxy.ts` — Clerk middleware (Next.js 16's renamed `middleware.ts`), runs on every request.
-- `src/app/layout.tsx` — wraps the app in `ClerkProvider`.
-- `src/components/header.tsx` — sign-in/sign-up/user button controls.
-- `src/app/sign-in`, `src/app/sign-up` — Clerk's hosted auth flows.
-- `src/lib/supabase/server.ts` — Supabase client for Server Components/Route Handlers, authenticated via `auth().getToken()`.
-- `src/lib/supabase/client.ts` — Supabase client for Client Components, authenticated via the `useSession()` hook.
-- `src/app/dashboard/page.tsx` — protected example page (`auth.protect()`) reading/writing the `tasks` table.
+Status filtering is driven by the URL (`/dashboard?status=doing`) rather than client state, so a filtered view is shareable and the filtering happens in Postgres.
 
-Authorization is enforced by Postgres Row Level Security, not application code — see the RLS policies above.
+## Things I know are missing
+
+Being upfront about the edges rather than pretending they aren't there:
+
+- **The plan limit check has a race.** Two simultaneous requests can both read the count before either inserts. Fixing it properly means moving the rule into a `BEFORE INSERT` trigger so the count and the insert are atomic. The application check gives a good error message; it isn't a guarantee.
+- **No automated tests yet.** The cross-org isolation behaviour is verified by hand with two accounts. It should be a Playwright test — that's the next thing I want to add.
+- **Migrations are hand-run SQL.** Fine for one developer against one database. On a team I'd use the Supabase CLI with migrations in version control and applied in CI.
+- **Deletes are hard deletes.** No soft delete or recovery.
+- **Development Clerk keys.** Not yet running against a production Clerk instance.

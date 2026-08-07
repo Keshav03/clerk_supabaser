@@ -1,6 +1,11 @@
 import Link from "next/link";
 import { auth } from "@clerk/nextjs/server";
-import { SignInButton, SignUpButton, Show } from "@clerk/nextjs";
+import {
+  SignInButton,
+  SignUpButton,
+  Show,
+  OrganizationSwitcher,
+} from "@clerk/nextjs";
 import { Button } from "@/components/ui/button";
 import { UserMenu } from "@/components/user-menu";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -32,9 +37,11 @@ export async function Header() {
           <Link href="/dashboard">
             <Button variant="ghost">Dashboard</Button>
           </Link>
+          <OrganizationSwitcher />
           <UserMenu planLabel={planLabel} />
         </Show>
       </div>
     </header>
   );
 }
+
