@@ -23,7 +23,7 @@ Skip this and Supabase rejects every token, which looks like an app where nothin
 
 ## 3. Enable organizations
 
-Clerk Dashboard → Organizations → enable. Then under Roles & Permissions, add a permission with the key `org:tasks:delete` and assign it to Admin only. The delete button won't appear for anyone until that permission exists.
+Clerk Dashboard → Organizations → enable. Then under Roles & Permissions, add a permission with the key `org:tasks:delete` and assign it to the Admin role. Both steps matter: creating the permission is not enough on its own, and `has()` silently returns `false` for a key that does not exist, so the delete button stays hidden for everyone until the key matches exactly and Admin has it.
 
 ## 4. Create the schema
 
