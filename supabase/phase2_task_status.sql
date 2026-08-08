@@ -12,11 +12,18 @@ alter table tasks
   add constraint tasks_status_check
   check (status in ('todo', 'doing', 'done'));
 
--- 2) Backfill from the old boolean, then retire it
-update tasks set status = 'done' where completed is true;
-
-alter table tasks
-  drop column if exists completed;
+-- 2) Backfill from the old boolean, then retire it.
+-- Guarded because the column is absent on databases that never had it.
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_name = 'tasks' and column_name = 'completed'
+  ) then
+    update tasks set status = 'done' where completed is true;
+    alter table tasks drop column completed;
+  end if;
+end $$;
 
 create index if not exists tasks_org_id_status_idx on tasks (org_id, status);
 
