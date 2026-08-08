@@ -60,7 +60,7 @@ export default async function DashboardPage({
 
   return (
     <div className="mx-auto flex w-full max-w-xl flex-col gap-8 px-6 py-12">
-      <h1 className="text-2xl font-semibold">Your tasks</h1>
+      <h1 className="text-2xl font-semibold">Team tasks</h1>
 
       <div className="rounded-xl border bg-white p-5 dark:bg-zinc-900">
         <div className="mb-2 flex items-center justify-between text-[13px] font-semibold">

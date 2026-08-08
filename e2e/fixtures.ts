@@ -1,4 +1,3 @@
-import { createClient } from "@supabase/supabase-js";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -101,11 +100,13 @@ async function ensureAdminMembership(orgId: string, userId: string) {
 }
 
 /**
- * Creates the two tenants in Clerk and gives each org exactly one task.
- * Idempotent, so repeated local runs reuse the same users and orgs.
+ * Provisions both tenants in Clerk as org admins. Idempotent, so repeated
+ * local runs reuse the same users and organizations.
  */
-export async function seedTenants(): Promise<Record<TenantKey, SeededTenant>> {
-  const seeded = {} as Record<TenantKey, SeededTenant>;
+export async function provisionTenants(): Promise<
+  Record<TenantKey, SeededTenant>
+> {
+  const provisioned = {} as Record<TenantKey, SeededTenant>;
 
   for (const [key, tenant] of Object.entries(TENANTS) as [
     TenantKey,
@@ -114,32 +115,11 @@ export async function seedTenants(): Promise<Record<TenantKey, SeededTenant>> {
     const userId = await findOrCreateUser(tenant.email);
     const orgId = await findOrCreateOrg(tenant.orgName, userId);
     await ensureAdminMembership(orgId, userId);
-    seeded[key] = { ...tenant, userId, orgId };
+    provisioned[key] = { ...tenant, userId, orgId };
   }
 
-  // Service role bypasses RLS, which is the only way to plant a row in one
-  // org while authenticated as nobody
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { persistSession: false } },
-  );
-
-  const orgIds = Object.values(seeded).map((tenant) => tenant.orgId);
-  await supabase.from("tasks").delete().in("org_id", orgIds);
-
-  const { error } = await supabase.from("tasks").insert(
-    Object.values(seeded).map((tenant) => ({
-      name: tenant.taskName,
-      org_id: tenant.orgId,
-      user_id: tenant.userId,
-      status: "todo",
-    })),
-  );
-  if (error) throw new Error(`Seeding tasks failed: ${error.message}`);
-
-  fs.writeFileSync(FIXTURES_FILE, JSON.stringify(seeded, null, 2));
-  return seeded;
+  fs.writeFileSync(FIXTURES_FILE, JSON.stringify(provisioned, null, 2));
+  return provisioned;
 }
 
 export function readTenants(): Record<TenantKey, SeededTenant> {
