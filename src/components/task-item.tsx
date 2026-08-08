@@ -82,7 +82,7 @@ export function TaskItem({
             aria-label="Delete task"
             disabled={isPending}
             onClick={handleDelete}
-            className="opacity-0 group-hover:opacity-100"
+            className="text-zinc-400 opacity-60 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 hover:text-red-500"
           >
             <Trash2 className="size-4" />
           </Button>

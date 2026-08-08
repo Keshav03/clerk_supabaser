@@ -1,6 +1,9 @@
 # clerk-supabaser
 
+[![CI](https://github.com/Keshav03/clerk_supabaser/actions/workflows/ci.yml/badge.svg)](https://github.com/Keshav03/clerk_supabaser/actions/workflows/ci.yml)
 **[Live demo](https://clerk-supabaser.vercel.app)** · sign up, create an organization, and the dashboard is yours.
+
+![Dashboard with org switcher, plan usage, and status filters](docs/dashboard.png)
 
 A small multi-tenant task app built with Next.js, [Clerk](https://clerk.com) and [Supabase](https://supabase.com). Users belong to organizations, and every task belongs to an organization rather than to a person — so switching orgs switches the whole workspace.
 
@@ -35,6 +38,18 @@ Any one of those could be bypassed on its own. The database one can't.
 Every write is a server action that reads `orgId` and `userId` from `auth()` and binds them itself. The client never supplies a tenant id, because a client-supplied tenant id is just a cross-tenant write waiting to happen.
 
 Plan limits are enforced the same way. The dashboard swaps the form for an upgrade prompt when you're at your limit, but that's a hint — `createTask` counts the org's tasks server-side and refuses the insert. Hiding a form is not enforcement.
+
+## Tests
+
+Cross-org isolation is covered end to end with Playwright:
+
+```bash
+npm run test:e2e
+```
+
+The suite provisions two users in two separate organizations through Clerk's Backend API, seeds one task into each org through the app's own UI, then asserts that each tenant sees its own task and not the other's. Sign-in uses Clerk's testing tokens to get past bot detection, and each session picks an active organization explicitly — a session without one carries no `o.id` claim, so there's no tenant for RLS to match and the dashboard has nothing to show.
+
+If you're reading the code, one experiment is worth more than the rest of this README: delete the `.eq("org_id", orgId)` from the dashboard query and run the suite again. It still passes, because the isolation was never coming from that line.
 
 ## Architecture
 
@@ -93,7 +108,7 @@ Status filtering is driven by the URL (`/dashboard?status=doing`) rather than cl
 Being upfront about the edges rather than pretending they aren't there:
 
 - **The plan limit check has a race.** Two simultaneous requests can both read the count before either inserts. Fixing it properly means moving the rule into a `BEFORE INSERT` trigger so the count and the insert are atomic. The application check gives a good error message; it isn't a guarantee.
-- **No automated tests yet.** The cross-org isolation behaviour is verified by hand with two accounts. It should be a Playwright test — that's the next thing I want to add.
+- **Test coverage stops at isolation.** Playwright covers cross-org isolation and sign-out. Admin-only delete and the plan limit are still checked by hand.
 - **Migrations are hand-run SQL.** Fine for one developer against one database. On a team I'd use the Supabase CLI with migrations in version control and applied in CI.
 - **Deletes are hard deletes.** No soft delete or recovery.
 - **Development Clerk keys.** Not yet running against a production Clerk instance.

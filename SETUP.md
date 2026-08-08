@@ -23,7 +23,7 @@ Skip this and Supabase rejects every token, which looks like an app where nothin
 
 ## 3. Enable organizations
 
-Clerk Dashboard → Organizations → enable. Then under Roles & Permissions, add a permission with the key `org:tasks:delete` and assign it to Admin only. The delete button won't appear for anyone until that permission exists.
+Clerk Dashboard → Organizations → enable. Then under Roles & Permissions, add a permission with the key `org:tasks:delete` and assign it to the Admin role. Both steps matter: creating the permission is not enough on its own, and `has()` silently returns `false` for a key that does not exist, so the delete button stays hidden for everyone until the key matches exactly and Admin has it.
 
 ## 4. Create the schema
 
@@ -101,10 +101,20 @@ npm run dev
 
 Sign up, create an organization from the switcher in the header, then go to `/dashboard`. Create a second organization and switch between them — the task lists are completely separate.
 
+## 6. Run the end-to-end tests
+
+```bash
+npm run test:e2e
+```
+
+Needs the same Clerk and Supabase keys as the app — no service role key. The suite creates two throwaway users (`e2e.alpha+clerk_test@…` and `e2e.beta+clerk_test@…`) and two orgs, seeds one task into each through the UI, then checks that neither tenant can see the other's data.
+
+For CI, add those four keys as GitHub Actions secrets (`NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`). The e2e job skips itself until `CLERK_SECRET_KEY` is present, so forks and fresh clones don't fail for missing secrets.
+
 ## Testing webhooks locally
 
 ```bash
 clerk webhooks listen --token "$(clerk webhooks token)" --forward-to http://localhost:3000/api/webhooks/clerk
 ```
 
-Add the relay URL it prints as an endpoint in the Clerk Dashboard, subscribed to the `subscription.*` events. Nothing is delivered until you do.
+Add the relay URL it prints as an endpoint in the Clerk Dashboard, subscribed to the `subscription.*` events. Nothing is delivered until you do. The webhook also needs `SUPABASE_SERVICE_ROLE_KEY` and `CLERK_WEBHOOK_SIGNING_SECRET` in `.env.local`.
